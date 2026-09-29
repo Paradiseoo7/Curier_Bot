@@ -1,0 +1,14 @@
+# Excludem fișierele de configurare locală cu secrete
+.env
+
+# Excludem baza de date locală de test
+*.db
+*.sqlite3
+
+# Excludem cache-ul Python
+__pycache__/
+*.pyc
+
+# Excludem mediul virtual
+venv/
+.venv/
