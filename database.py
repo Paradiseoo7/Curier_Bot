@@ -131,7 +131,7 @@ def create_order(client_id: int, details: str):
 
 
 def count_active_orders_by_client(client_id: int) -> int:
-    """Numără comenzile active sau preluate ale unui client."""
+    """Numără doar comenzile în derulare ('active' sau 'taken'). Comenzile 'completed' nu sunt incluse."""
     conn = get_connection()
     cursor = conn.cursor()
     placeholder = "%s" if DATABASE_URL else "?"
@@ -188,11 +188,48 @@ def claim_order(order_id: int, courier_id: int):
     return True, 'taken'
 
 
+def complete_order(order_id: int, user_id: int):
+    """Marchează comanda ca 'completed' dacă este inițiată de clientul sau curierul ei."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    placeholder = "%s" if DATABASE_URL else "?"
+
+    # Verificăm dacă comanda există și este în stare 'taken'
+    cursor.execute(f"SELECT client_id, courier_id, status FROM orders WHERE id = {placeholder}", (order_id,))
+    res = cursor.fetchone()
+    if not res:
+        cursor.close()
+        conn.close()
+        return False, "not_found"
+
+    client_id, courier_id, status = res[0], res[1], res[2]
+
+    if status == 'completed':
+        cursor.close()
+        conn.close()
+        return False, "already_completed"
+
+    if user_id not in (client_id, courier_id):
+        cursor.close()
+        conn.close()
+        return False, "unauthorized"
+
+    # Actualizăm starea comenzii
+    cursor.execute(
+        f"UPDATE orders SET status = 'completed' WHERE id = {placeholder}",
+        (order_id,)
+    )
+    conn.commit()
+    cursor.close()
+    conn.close()
+    return True, "completed"
+
+
 def get_order_details(order_id: int):
     conn = get_connection()
     cursor = conn.cursor()
     placeholder = "%s" if DATABASE_URL else "?"
-    cursor.execute(f"SELECT client_id, details, status FROM orders WHERE id = {placeholder}", (order_id,))
+    cursor.execute(f"SELECT client_id, details, status, courier_id FROM orders WHERE id = {placeholder}", (order_id,))
     result = cursor.fetchone()
     cursor.close()
     conn.close()

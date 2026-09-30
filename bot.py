@@ -15,7 +15,7 @@ from aiogram.types import (
 
 import database as db
 
-BOT_TOKEN = os.environ.get("BOT_TOKEN" )
+BOT_TOKEN = os.environ.get("BOT_TOKEN")
 ADMIN_ID = int(os.environ.get("ADMIN_ID", 0))
 MAX_ACTIVE_ORDERS_PER_CLIENT = 2
 
@@ -60,6 +60,11 @@ TEXTS = {
         'claim_cancelled_by_client': "❌ **Comanda a fost anulată de client.**",
         'notify_client_accepted': "✅ **Comanda ta a fost preluată!**\n\n🚴‍♂️ **Curier:** {name}\n📞 **Telefon Curier:** `{phone}`",
         'notify_courier_accepted': "📋 **Comandă preluată cu succes (#{order_id})!**\n\n📞 **Telefon Client:** `{phone}`",
+        'btn_finish_order': "✅ Finalizează Comanda",
+        'finish_success_alert': "Comanda a fost finalizată cu succes!",
+        'order_completed_msg': "🎉 **Comanda #{order_id} a fost finalizată!**\nSistemul este acum pregătit pentru noi comenzi.",
+        'notify_partner_completed': "🏁 **Comanda #{order_id} a fost marcată ca finalizată.**",
+        'already_completed_alert': "Această comandă este deja finalizată!",
         'need_register': "Te rugăm să te înregistrezi mai întâi apăsând butonul /start.",
         'help_prompt': "🚨 **Centru de Ajutor (Hîncești)**\n\nDescrie problema întâmpinată într-un singur mesaj:",
         'help_sent': "✅ Mesajul tău a fost trimis echipei de suport!",
@@ -99,6 +104,11 @@ TEXTS = {
         'claim_cancelled_by_client': "❌ **Заказ был отменен.**",
         'notify_client_accepted': "✅ **Ваш заказ принят!**\n\n🚴‍♂️ **Курьер:** {name}\n📞 **Телефон:** `{phone}`",
         'notify_courier_accepted': "📋 **Заказ успешно принят (#{order_id})!**\n\n📞 **Телефон клиента:** `{phone}`",
+        'btn_finish_order': "✅ Завершить заказ",
+        'finish_success_alert': "Заказ успешно завершен!",
+        'order_completed_msg': "🎉 **Заказ #{order_id} был завершен!**\nСистема готова к новым заказам.",
+        'notify_partner_completed': "🏁 **Заказ #{order_id} был отмечен как завершенный.**",
+        'already_completed_alert': "Этот заказ уже завершен!",
         'need_register': "Пожалуйста, сначала зарегистрируйтесь через /start.",
         'help_prompt': "🚨 **Центр помощи (Хынчешты)**\n\nОпишите проблему:",
         'help_sent': "✅ Ваше сообщение отправлено в поддержку!",
@@ -376,14 +386,25 @@ async def process_claim_order(callback: CallbackQuery):
 
         courier_url = f"https://t.me/{callback.from_user.username}" if callback.from_user.username else (f"https://t.me/+{clean_courier_phone}" if clean_courier_phone.isdigit() else None)
 
-        client_chat_btn = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="💬 Chat Client", url=client_url)]]) if client_url else None
-        courier_chat_btn = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="💬 Chat Curier", url=courier_url)]]) if courier_url else None
+        # Generăm butoane de chat + buton de finalizare comandă pentru client și curier
+        client_buttons = []
+        if courier_url:
+            client_buttons.append(InlineKeyboardButton(text="💬 Chat Curier", url=courier_url))
+        client_buttons.append(InlineKeyboardButton(text=cli_t['btn_finish_order'], callback_data=f"finish_{order_id}"))
+
+        courier_buttons = []
+        if client_url:
+            courier_buttons.append(InlineKeyboardButton(text="💬 Chat Client", url=client_url))
+        courier_buttons.append(InlineKeyboardButton(text=c_t['btn_finish_order'], callback_data=f"finish_{order_id}"))
+
+        client_kb = InlineKeyboardMarkup(inline_keyboard=[[btn] for btn in client_buttons])
+        courier_kb = InlineKeyboardMarkup(inline_keyboard=[[btn] for btn in courier_buttons])
 
         try:
             await bot.send_message(
                 chat_id=client_id,
                 text=cli_t['notify_client_accepted'].format(name=callback.from_user.first_name, phone=courier_phone),
-                reply_markup=courier_chat_btn,
+                reply_markup=client_kb,
                 parse_mode="Markdown"
             )
         except Exception as e:
@@ -393,7 +414,7 @@ async def process_claim_order(callback: CallbackQuery):
             await bot.send_message(
                 chat_id=courier_id,
                 text=c_t['notify_courier_accepted'].format(order_id=order_id, phone=client_phone),
-                reply_markup=client_chat_btn,
+                reply_markup=courier_kb,
                 parse_mode="Markdown"
             )
         except Exception as e:
@@ -405,6 +426,50 @@ async def process_claim_order(callback: CallbackQuery):
             await callback.message.edit_text(f"{callback.message.text}\n\n{c_t['claim_cancelled_by_client']}", parse_mode="Markdown")
         else:
             await callback.message.edit_text(f"{callback.message.text}\n\n{c_t['claim_already_taken']}", parse_mode="Markdown")
+
+
+@router.callback_query(F.data.startswith("finish_"))
+async def process_finish_order(callback: CallbackQuery):
+    order_id = int(callback.data.split("_")[1])
+    user_id = callback.from_user.id
+
+    user = db.get_user(user_id)
+    lang = user[4] if user else 'ro'
+    t = TEXTS[lang]
+
+    success, status_msg = db.complete_order(order_id, user_id)
+
+    if success:
+        await callback.answer(t['finish_success_alert'], show_alert=True)
+        await callback.message.edit_text(
+            f"{callback.message.text}\n\n{t['order_completed_msg'].format(order_id=order_id)}",
+            parse_mode="Markdown"
+        )
+
+        # Notificăm și cealaltă parte (partenerul din comandă)
+        order_info = db.get_order_details(order_id)
+        if order_info:
+            client_id, _, _, courier_id = order_info
+            partner_id = courier_id if user_id == client_id else client_id
+
+            if partner_id:
+                partner_user = db.get_user(partner_id)
+                p_lang = partner_user[4] if partner_user else 'ro'
+                p_t = TEXTS[p_lang]
+
+                try:
+                    await bot.send_message(
+                        chat_id=partner_id,
+                        text=p_t['notify_partner_completed'].format(order_id=order_id),
+                        parse_mode="Markdown"
+                    )
+                except Exception as e:
+                    logging.error(f"Eroare notificare partener la finalizare: {e}")
+
+    elif status_msg == "already_completed":
+        await callback.answer(t['already_completed_alert'], show_alert=True)
+    else:
+        await callback.answer(t['cancel_failed_alert'], show_alert=True)
 
 
 @router.message(F.text.in_({"🆘 Centru de Ajutor", "🆘 Центр помощи"}))
