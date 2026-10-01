@@ -30,7 +30,7 @@ TEXTS = {
         'welcome_lang': "👋 Salut! Alege limba / Выберите язык:",
         'choose_role': "📍 **Livrare Hîncești**\n\nAlege rolul tău în aplicație:",
         'btn_client': "🙋‍♂️ Sunt Client",
-        'btn_courier': "🚴‍♂️️ Sunt Curier",
+        'btn_courier': "🚴‍♂️ Sunt Curier",
         'ask_phone': "Te rugăm să apeși pe butonul de mai jos sau **să introduci numărul tău de telefon din R. Moldova (+373 / 06x / 07x)**:",
         'btn_send_phone': "📱 Trimite numărul de telefon",
         'invalid_phone': "❌ Număr invalid! Te rugăm să introduci un număr din Republica Moldova (+373 / 06x / 07x).",
@@ -98,7 +98,7 @@ TEXTS = {
         'cancel_success_alert': "Заказ успешно удален!",
         'cancel_success_msg': "🗑️ **Ваш заказ был удален.**",
         'cancel_failed_alert': "Вы не можете удалить этот заказ.",
-        'no_couriers': "⚠️ В настоящее время в Хынчештах нет активных курьеров.",
+        'no_couriers': "⚠️️ В настоящее время в Хынчештах нет активных курьеров.",
         'new_order_courier': "🚨 **НОВЫЙ ЗАКАЗ в Хынчештах!**\n\n📝 **Детали:** {details}",
         'btn_claim': "⚡ Принять Заказ",
         'claim_success_alert': "🎉 Поздравляем! Вы приняли заказ!",
@@ -118,7 +118,7 @@ TEXTS = {
         'help_sent': "✅ Ваше сообщение отправлено в поддержку!",
         'admin_report_notify': "⚠️ **НОВАЯ ЖАЛОБА!**\n\n👤 **Имя:** {name}\n🆔 **ID:** `{user_id}`\n📱 **Тел:** `{phone}`\n\n📝 **Текст:**\n{text}",
         'notify_admin_new_order': "📦 **НОВЫЙ ЗАКАЗ (#{order_id})**\n\n👤 **ID Клиента:** `{client_id}`\n📝 **Детали:** {details}",
-        'notify_admin_claimed': "⚡ **ЗАКАЗ ПРИНЯТ (#{order_id})**\n\n🚴‍♂️️ **ID Курьера:** `{courier_id}`",
+        'notify_admin_claimed': "⚡ **ЗАКАЗ ПРИНЯТ (#{order_id})**\n\n🚴‍♂️ **ID Курьера:** `{courier_id}`",
         'notify_admin_cancelled': "❌ **ЗАКАЗ ОТМЕНЕН (#{order_id})** клиентом `{client_id}`.",
         'notify_admin_completed': "🏁 **ЗАКАЗ ЗАВЕРШЕН (#{order_id})** пользователем `{user_id}`."
     }
@@ -190,7 +190,7 @@ async def cmd_admin(message: Message):
         "📊 **PANOU ADMINISTRATOR (HÎNCEȘTI)**\n\n"
         f"👥 **Total Utilizatori:** `{stats['total_users']}`\n"
         f"🙋‍♂️ **Total Clienți:** `{stats['total_clients']}`\n"
-        f"🚴‍♂️ **Total Curieri Înregistrați:** `{stats['total_couriers']}`\n"
+        f"🚴‍♂️️ **Total Curieri Înregistrați:** `{stats['total_couriers']}`\n"
         f"🟢 **Curieri Activi (În Tură):** `{stats['active_couriers']}`"
     )
     await message.answer(text, parse_mode="Markdown")
@@ -346,11 +346,13 @@ async def publish_order(message: Message, state: FSMContext):
         ])
 
         try:
+            # disable_notification=False garantează că notificarea este expediată cu sunet și vibrație
             sent_msg = await bot.send_message(
                 chat_id=courier_id,
                 text=c_t['new_order_courier'].format(details=details),
                 reply_markup=claim_btn,
-                parse_mode="Markdown"
+                parse_mode="Markdown",
+                disable_notification=False
             )
             courier_order_messages[order_id].append((courier_id, sent_msg.message_id))
         except Exception as e:
@@ -468,7 +470,8 @@ async def process_claim_order(callback: CallbackQuery):
                 chat_id=client_id,
                 text=cli_t['notify_client_accepted'].format(name=callback.from_user.first_name, phone=courier_phone),
                 reply_markup=client_kb,
-                parse_mode="Markdown"
+                parse_mode="Markdown",
+                disable_notification=False
             )
         except Exception as e:
             logging.error(f"Eroare notificare client: {e}")
@@ -478,7 +481,8 @@ async def process_claim_order(callback: CallbackQuery):
                 chat_id=courier_id,
                 text=c_t['notify_courier_accepted'].format(order_id=order_id, phone=client_phone),
                 reply_markup=courier_kb,
-                parse_mode="Markdown"
+                parse_mode="Markdown",
+                disable_notification=False
             )
         except Exception as e:
             logging.error(f"Eroare notificare curier: {e}")
@@ -513,7 +517,7 @@ async def process_finish_order(callback: CallbackQuery):
             parse_mode="Markdown"
         )
 
-        # Notificare Administrator despre finalizarea comenzi
+        # Notificare Administrator despre finalizarea comenzii
         if ADMIN_ID:
             try:
                 await bot.send_message(
@@ -538,7 +542,8 @@ async def process_finish_order(callback: CallbackQuery):
                     await bot.send_message(
                         chat_id=partner_id,
                         text=p_t['notify_partner_completed'].format(order_id=order_id),
-                        parse_mode="Markdown"
+                        parse_mode="Markdown",
+                        disable_notification=False
                     )
                 except Exception as e:
                     logging.error(f"Eroare notificare partener la finalizare: {e}")
