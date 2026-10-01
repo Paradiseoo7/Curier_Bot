@@ -1,7 +1,5 @@
-.env
-*.db
-*.sqlite3
-__pycache__/
-*.pyc
-venv/
+.idea/
 .venv/
+__pycache__/
+*.db
+curier_bot

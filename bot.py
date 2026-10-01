@@ -16,7 +16,7 @@ from aiogram.types import (
 import database as db
 
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
-ADMIN_ID = int(os.environ.get("ADMIN_ID", 0))
+ADMIN_ID = int(os.environ.get("ADMIN_ID"))
 MAX_ACTIVE_ORDERS_PER_CLIENT = 2
 
 logging.basicConfig(level=logging.INFO)
